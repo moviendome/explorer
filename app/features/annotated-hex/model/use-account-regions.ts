@@ -67,13 +67,16 @@ export function useAccountRegions(
             if (rawData.length < SPL_TOKEN_ACCOUNT_SIZE) return null;
             return buildSplTokenAccountRegions(rawData, safeCreate(parsedInfo, TokenAccountInfo));
         }
-        // No parsed.type. For Token-2022 with length >= 165, the accountType byte at
-        // offset 165 disambiguates: 1 = Mint, 2 = Account. Below 165 must be a plain mint.
+        // No parsed.type. For Token-2022 with length > 165, the accountType byte at
+        // offset 165 disambiguates: 1 = Mint, 2 = Account. Any other value is a
+        // non-spec or unknown account type — fall back to plain HexData rather than
+        // label arbitrary bytes with a misleading layout (a public explorer rendering
+        // confidently-wrong field names is worse than rendering no annotation).
         if (rawData.length > SPL_TOKEN_ACCOUNT_SIZE) {
             const accountTypeByte = rawData[SPL_TOKEN_ACCOUNT_SIZE];
-            return accountTypeByte === 1
-                ? buildSplMintRegions(rawData, undefined)
-                : buildSplTokenAccountRegions(rawData, undefined);
+            if (accountTypeByte === 1) return buildSplMintRegions(rawData, undefined);
+            if (accountTypeByte === 2) return buildSplTokenAccountRegions(rawData, undefined);
+            return null;
         }
         if (rawData.length >= SPL_MINT_SIZE) {
             return buildSplMintRegions(rawData, undefined);

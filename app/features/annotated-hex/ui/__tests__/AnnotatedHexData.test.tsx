@@ -3,7 +3,9 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { buildSplMintRegions, SPL_MINT_SIZE } from '../../model/spl-token';
 import { Region } from '../../model/types';
-import { AnnotatedHexData, TooltipBody } from '../AnnotatedHexData';
+import { __test_exports__, AnnotatedHexData } from '../AnnotatedHexData';
+
+const { TooltipBody } = __test_exports__;
 
 // Radix Tooltip pulls in ResizeObserver + DOMRect via @radix-ui/react-use-size; jsdom lacks both.
 beforeAll(() => {
@@ -223,7 +225,7 @@ describe('AnnotatedHexData', () => {
 
         const tooltip = screen.getByTestId('annotated-tooltip-test.unparsed');
         expect(tooltip).toHaveTextContent('Test Unparsed');
-        expect(tooltip).toHaveTextContent('(unparsed: no-jsonparsed)');
+        expect(tooltip).toHaveTextContent('(no parsed data)');
     });
 
     it('TooltipBody renders amount DecodedValue without decimals as raw only (no ui-scaled)', () => {

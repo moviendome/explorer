@@ -130,15 +130,19 @@ describe('useAccountRegions', () => {
         expect(result.current![0].id).toBe('token.mint');
     });
 
-    it('Token-2022 (no parsed.type): dispatches to Mint layout when bytes[165] = 0 (current behavior: non-1 → TokenAccount)', () => {
-        // Documents current behavior: the accountType byte is compared strictly to 1 — anything
-        // else (0, 2, 42, …) falls through to buildSplTokenAccountRegions.
+    it.each([
+        ['unassigned discriminator byte 0', 0],
+        ['unknown discriminator byte 42', 42],
+        ['unknown discriminator byte 255', 255],
+    ])('Token-2022 (no parsed.type): returns null when bytes[165] is %s', (_label, byte) => {
+        // Only accountTypeByte === 1 (Mint) and === 2 (Account) are spec-defined.
+        // Anything else must fall back to null / plain HexData — rendering a public
+        // explorer with confidently-wrong field labels would be worse than no annotation.
         const bytes = zeroBytes(200);
-        bytes[165] = 42;
+        bytes[165] = byte;
         const account = makeAccount({ owner: TOKEN_2022_PROGRAM_ID, rawData: bytes });
         const { result } = renderHook(() => useAccountRegions(account, bytes));
-        expect(result.current).not.toBeNull();
-        expect(result.current![0].id).toBe('token.mint');
+        expect(result.current).toBeNull();
     });
 
     it('memo is cached across parent re-renders that produce a fresh account ref with content-equal parsed info', () => {

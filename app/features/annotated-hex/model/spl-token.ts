@@ -65,7 +65,7 @@ export function buildSplMintRegions(raw: Uint8Array, parsed: MintAccountInfo | u
     // zero padding; the TLV walk begins at 165 (accountType) + 1.
     if (raw.length >= SPL_TOKEN_ACCOUNT_SIZE) {
         regions.push({
-            decodedValue: { kind: 'unparsed', reason: 'no-jsonparsed' },
+            decodedValue: { kind: 'unparsed', reason: 'padding' },
             id: `mint.padding@${SPL_MINT_SIZE}`,
             kind: 'neutral',
             length: SPL_TOKEN_ACCOUNT_SIZE - SPL_MINT_SIZE,
@@ -76,7 +76,7 @@ export function buildSplMintRegions(raw: Uint8Array, parsed: MintAccountInfo | u
     } else if (raw.length > SPL_MINT_SIZE) {
         // Tail bytes that don't reach the Token-2022 discriminator offset. Rare.
         regions.push({
-            decodedValue: { kind: 'unparsed', reason: 'no-jsonparsed' },
+            decodedValue: { kind: 'unparsed', reason: 'padding' },
             id: `mint.tail@${SPL_MINT_SIZE}`,
             kind: 'neutral',
             length: raw.length - SPL_MINT_SIZE,
@@ -197,7 +197,7 @@ function decodeTokenAccountField(
         case 'token.nativeAmount': {
             const isNative = readUint32LE(raw, 109) === 1;
             if (!isNative) {
-                return { kind: 'unparsed', reason: 'no-jsonparsed' };
+                return { kind: 'unparsed', reason: 'not-applicable' };
             }
             const rawAmount = toBigIntOrFallback(parsed?.rentExemptReserve?.amount, readU64LE(raw, 113));
             return { decimals: parsed?.rentExemptReserve?.decimals, kind: 'amount', raw: rawAmount };

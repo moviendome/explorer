@@ -5,10 +5,18 @@ import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { cn } from '@shared/utils';
 import { useMemo } from 'react';
 
-import { DecodedValue, Region } from '../model/types';
+import { DecodedValue, Region, UnparsedReason } from '../model/types';
 import { cellClasses, chipClasses } from './palette';
 
 const ROW_SIZE = 16;
+
+const UNPARSED_REASON_LABEL: Record<UnparsedReason, string> = {
+    'no-jsonparsed': 'no parsed data',
+    'not-applicable': 'not applicable',
+    padding: 'padding',
+    truncated: 'truncated',
+    'unknown-ext': 'unknown extension',
+};
 
 type Props = {
     raw: Uint8Array;
@@ -88,7 +96,7 @@ function Legend({ regions }: { regions: Region[] }) {
                     data-testid={`annotated-hex-legend-${region.id}`}
                     className={cn(
                         'e-inline-flex e-items-center e-gap-1 e-rounded e-border e-px-2 e-py-0.5 e-font-medium',
-                        chipClasses(region.kind, rotationIndex),
+                        chipClasses(region.kind === 'neutral', rotationIndex),
                     )}
                 >
                     {region.name}
@@ -171,7 +179,7 @@ function RegionSegment({
                     className={cn(
                         'e-inline-flex e-gap-px e-rounded-[2px] e-cursor-help e-outline-none',
                         'focus-visible:e-ring-2 focus-visible:e-ring-white/40',
-                        cellClasses(region.kind, rotationIndex),
+                        cellClasses(region.kind === 'neutral', rotationIndex),
                     )}
                 >
                     {Array.from(bytes).map((byte, i) => (
@@ -224,7 +232,7 @@ function Cell({ offset, byte, regionId }: { offset: number; byte: number; region
     );
 }
 
-export function TooltipBody({ region }: { region: Region }) {
+function TooltipBody({ region }: { region: Region }) {
     return (
         <div
             data-testid={`annotated-tooltip-${region.id}`}
@@ -283,7 +291,7 @@ function RenderDecodedValue({ value }: { value: DecodedValue }) {
         case 'text':
             return <span className="e-break-words">{value.value}</span>;
         case 'unparsed':
-            return <span className="e-italic e-text-neutral-400">(unparsed: {value.reason})</span>;
+            return <span className="e-italic e-text-neutral-400">({UNPARSED_REASON_LABEL[value.reason]})</span>;
         default: {
             const _exhaustive: never = value;
             void _exhaustive;
@@ -291,4 +299,13 @@ function RenderDecodedValue({ value }: { value: DecodedValue }) {
         }
     }
 }
+
+/**
+ * Test-only export surface. These are internal implementation details that
+ * the test suite exercises directly to unit-test rendering per DecodedValue
+ * kind without mounting the full grid. Do NOT import in production code —
+ * the prop signatures here are not part of the module's public API.
+ * @internal
+ */
+export const __test_exports__ = { TooltipBody };
 

@@ -1,5 +1,3 @@
-import { FieldKind } from '../model/types';
-
 const ROTATION = [
     { cell: 'e-bg-blue-500/20 e-text-blue-300', chip: 'e-bg-blue-500/30 e-text-blue-200 e-border-blue-500/40' },
     { cell: 'e-bg-green-500/20 e-text-green-300', chip: 'e-bg-green-500/30 e-text-green-200 e-border-green-500/40' },
@@ -16,12 +14,17 @@ const NEUTRAL = {
     chip: 'e-bg-neutral-500/30 e-text-neutral-200 e-border-neutral-500/40',
 } as const;
 
-export function cellClasses(kind: FieldKind, rotationIndex: number): string {
-    if (kind === 'neutral') return NEUTRAL.cell;
+// Color dispatch is driven by "is this a neutral region?" (padding, unknown, etc.)
+// vs. "assign a rotating palette slot". Originally the first parameter was `kind:
+// FieldKind`, but only the `'neutral'` vs. non-neutral split drove behavior —
+// everything else rotated identically — so the discriminator is lifted to a plain
+// boolean to keep the API honest.
+export function cellClasses(isNeutral: boolean, rotationIndex: number): string {
+    if (isNeutral) return NEUTRAL.cell;
     return ROTATION[rotationIndex % ROTATION.length].cell;
 }
 
-export function chipClasses(kind: FieldKind, rotationIndex: number): string {
-    if (kind === 'neutral') return NEUTRAL.chip;
+export function chipClasses(isNeutral: boolean, rotationIndex: number): string {
+    if (isNeutral) return NEUTRAL.chip;
     return ROTATION[rotationIndex % ROTATION.length].chip;
 }
