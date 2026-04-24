@@ -105,6 +105,62 @@ describe('buildSplTokenAccountRegions', () => {
         expect(amountRegion.decodedValue.decimals).toBe(6);
     });
 
+    it.each(['NaN', '1.5', '123abc', '-', '++1'])(
+        'token.amount falls back to raw u64 when parsed.tokenAmount.amount is %s',
+        badAmount => {
+            const parsed: TokenAccountInfo = {
+                isNative: false,
+                mint: PublicKey.default,
+                owner: PublicKey.default,
+                state: 'initialized',
+                tokenAmount: { amount: badAmount, decimals: 6, uiAmountString: '' },
+            };
+            const regions = buildSplTokenAccountRegions(buildSplTokenAccountBytes({ amount: 7n }), parsed);
+            const amountRegion = regions.find(r => r.id === 'token.amount')!;
+            if (amountRegion.decodedValue.kind !== 'amount') throw new Error('unreachable');
+            expect(amountRegion.decodedValue.raw).toBe(7n);
+            expect(amountRegion.decodedValue.decimals).toBe(6);
+        },
+    );
+
+    it.each(['NaN', '1.5', '123abc'])(
+        'token.nativeAmount falls back to raw u64 when parsed.rentExemptReserve.amount is %s',
+        badAmount => {
+            const parsed: TokenAccountInfo = {
+                isNative: true,
+                mint: PublicKey.default,
+                owner: PublicKey.default,
+                rentExemptReserve: { amount: badAmount, decimals: 9, uiAmountString: '' },
+                state: 'initialized',
+                tokenAmount: { amount: '0', decimals: 9, uiAmountString: '0' },
+            };
+            const bytes = buildSplTokenAccountBytes({ isNative: true, nativeAmount: 2039280n });
+            const regions = buildSplTokenAccountRegions(bytes, parsed);
+            const nativeRegion = regions.find(r => r.id === 'token.nativeAmount')!;
+            if (nativeRegion.decodedValue.kind !== 'amount') throw new Error('unreachable');
+            expect(nativeRegion.decodedValue.raw).toBe(2039280n);
+        },
+    );
+
+    it.each(['NaN', '1.5', '123abc'])(
+        'token.delegatedAmount falls back to raw u64 when parsed.delegatedAmount.amount is %s',
+        badAmount => {
+            const parsed: TokenAccountInfo = {
+                delegate: PublicKey.default,
+                delegatedAmount: { amount: badAmount, decimals: 6, uiAmountString: '' },
+                isNative: false,
+                mint: PublicKey.default,
+                owner: PublicKey.default,
+                state: 'initialized',
+                tokenAmount: { amount: '0', decimals: 6, uiAmountString: '0' },
+            };
+            const regions = buildSplTokenAccountRegions(buildSplTokenAccountBytes({ delegatedAmount: 123n }), parsed);
+            const delegatedRegion = regions.find(r => r.id === 'token.delegatedAmount')!;
+            if (delegatedRegion.decodedValue.kind !== 'amount') throw new Error('unreachable');
+            expect(delegatedRegion.decodedValue.raw).toBe(123n);
+        },
+    );
+
     it('delegate COption: tag=0 → isNone=true, pubkey slot still in layout', () => {
         const regions = buildSplTokenAccountRegions(buildSplTokenAccountBytes({ delegate: null }), undefined);
         const tag = regions.find(r => r.id === 'token.delegateOption')!;

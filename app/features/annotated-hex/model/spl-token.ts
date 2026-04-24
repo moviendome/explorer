@@ -9,6 +9,23 @@ import { DecodedValue, LayoutField, Region } from './types';
 // etc.) rendered in a tooltip. Prevents layout blow-out from adversarial inputs.
 export const MAX_DISPLAY_STRING = 256;
 
+// Parse a jsonParsed amount string from an RPC payload. The superstruct schema
+// accepts any string() for these fields (amount / supply / rentExemptReserve.amount /
+// delegatedAmount.amount), so a drifted or adversarial RPC can return 'NaN', '1.5',
+// '123abc', or similar. BigInt() throws SyntaxError on those; without this wrapper
+// the throw escapes useMemo, the ErrorBoundary catches it, and resetKeys=[pubkey]
+// never changes — latching the annotated view to HexData fallback for the session.
+// BigInt() is otherwise permissive: '' → 0n, '0x10' → 16n, ' 1 ' → 1n. Those pass
+// through unchanged; the helper only activates on the actual-throw cases.
+export function toBigIntOrFallback(parsedAmount: string | undefined, fallback: bigint): bigint {
+    if (parsedAmount === undefined) return fallback;
+    try {
+        return BigInt(parsedAmount);
+    } catch {
+        return fallback;
+    }
+}
+
 // Replace C0/C1 controls and bidi overrides (which can spoof visual order) with
 // U+FFFD, then truncate. Safe to render as React text children.
 export function sanitizeDisplayString(value: string): string {
@@ -77,7 +94,7 @@ function decodeMintField(fieldId: string, raw: Uint8Array, parsed: MintAccountIn
         case 'mint.mintAuthority':
             return decodeCOptionPubkey(raw, 0, 4, parsed?.mintAuthority);
         case 'mint.supply': {
-            const rawAmount = parsed?.supply !== undefined ? BigInt(parsed.supply) : readU64LE(raw, 36);
+            const rawAmount = toBigIntOrFallback(parsed?.supply, readU64LE(raw, 36));
             return { decimals: parsed?.decimals, kind: 'amount', raw: rawAmount };
         }
         case 'mint.decimals':
@@ -163,8 +180,7 @@ function decodeTokenAccountField(
                 ? { base58: parsed.owner.toBase58(), kind: 'pubkey' }
                 : { base58: bs58.encode(raw.slice(32, 64)), kind: 'pubkey' };
         case 'token.amount': {
-            const amountStr = parsed?.tokenAmount?.amount;
-            const rawAmount = amountStr !== undefined ? BigInt(amountStr) : readU64LE(raw, 64);
+            const rawAmount = toBigIntOrFallback(parsed?.tokenAmount?.amount, readU64LE(raw, 64));
             return { decimals: parsed?.tokenAmount?.decimals, kind: 'amount', raw: rawAmount };
         }
         case 'token.delegateOption':
@@ -183,15 +199,11 @@ function decodeTokenAccountField(
             if (!isNative) {
                 return { kind: 'unparsed', reason: 'no-jsonparsed' };
             }
-            const rawAmount = parsed?.rentExemptReserve
-                ? BigInt(parsed.rentExemptReserve.amount)
-                : readU64LE(raw, 113);
+            const rawAmount = toBigIntOrFallback(parsed?.rentExemptReserve?.amount, readU64LE(raw, 113));
             return { decimals: parsed?.rentExemptReserve?.decimals, kind: 'amount', raw: rawAmount };
         }
         case 'token.delegatedAmount': {
-            const rawAmount = parsed?.delegatedAmount
-                ? BigInt(parsed.delegatedAmount.amount)
-                : readU64LE(raw, 121);
+            const rawAmount = toBigIntOrFallback(parsed?.delegatedAmount?.amount, readU64LE(raw, 121));
             return { decimals: parsed?.delegatedAmount?.decimals, kind: 'amount', raw: rawAmount };
         }
         case 'token.closeAuthorityOption':

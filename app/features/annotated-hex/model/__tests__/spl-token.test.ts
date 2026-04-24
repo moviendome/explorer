@@ -1,7 +1,7 @@
 import bs58 from 'bs58';
 import { describe, expect, it } from 'vitest';
 
-import { buildSplMintRegions, SPL_MINT_LAYOUT, SPL_MINT_SIZE } from '../spl-token';
+import { buildSplMintRegions, SPL_MINT_LAYOUT, SPL_MINT_SIZE, toBigIntOrFallback } from '../spl-token';
 
 type MintBuilderOpts = {
     mintAuthority?: Uint8Array | null;
@@ -88,6 +88,26 @@ describe('buildSplMintRegions', () => {
         expect(supplyRegion.decodedValue.raw).toBe(1000000n);
     });
 
+    it.each([
+        ['NaN', 'NaN'],
+        ['decimal', '1.5'],
+        ['trailing garbage', '123abc'],
+        ['bare sign', '-'],
+        ['double sign', '++1'],
+    ])('falls back to raw u64 when parsed.supply is %s (not BigInt-parseable)', (_label, badSupply) => {
+        const bytes = buildSplMintBytes({ supply: 42n });
+        const regions = buildSplMintRegions(bytes, {
+            decimals: 6,
+            freezeAuthority: null,
+            isInitialized: true,
+            mintAuthority: null,
+            supply: badSupply,
+        });
+        const supplyRegion = regions.find(r => r.id === 'mint.supply')!;
+        if (supplyRegion.decodedValue.kind !== 'amount') throw new Error('unreachable');
+        expect(supplyRegion.decodedValue.raw).toBe(42n);
+    });
+
     it('encodes mint_authority as base58 from raw bytes when parsed is undefined', () => {
         const authority = fakePubkey(7);
         const bytes = buildSplMintBytes({ mintAuthority: authority });
@@ -133,4 +153,37 @@ describe('buildSplMintRegions', () => {
         expect(() => buildSplMintRegions(new Uint8Array(50), undefined)).toThrow(/≥ 82 bytes/);
     });
 
+});
+
+describe('toBigIntOrFallback', () => {
+    it('returns BigInt of a valid decimal string', () => {
+        expect(toBigIntOrFallback('1000000', 0n)).toBe(1000000n);
+    });
+
+    it('returns the fallback when input is undefined', () => {
+        expect(toBigIntOrFallback(undefined, 42n)).toBe(42n);
+    });
+
+    it.each(['NaN', '1.5', '123abc', '-', '++1'])(
+        'returns the fallback when input is %s (not BigInt-parseable)',
+        bad => {
+            expect(toBigIntOrFallback(bad, 99n)).toBe(99n);
+        },
+    );
+
+    it('returns BigInt of a negative decimal string (BigInt accepts it)', () => {
+        expect(toBigIntOrFallback('-5', 0n)).toBe(-5n);
+    });
+
+    // BigInt() is permissive about some strings that look unparseable at a glance.
+    // These inputs do not throw and therefore do not trigger the fallback. Documented
+    // so the permissive parsing stays in place deliberately rather than by accident.
+    it.each([
+        ['empty string', '', 0n],
+        ['hex literal', '0x10', 16n],
+        ['whitespace-padded integer', ' 1 ', 1n],
+        ['octal literal', '0o10', 8n],
+    ])('accepts %s as BigInt (no fallback)', (_label, input, expected) => {
+        expect(toBigIntOrFallback(input, 999n)).toBe(expected);
+    });
 });
