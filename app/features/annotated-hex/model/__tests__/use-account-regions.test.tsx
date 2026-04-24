@@ -141,4 +141,57 @@ describe('useAccountRegions', () => {
         expect(result.current![0].id).toBe('token.mint');
     });
 
+    it('memo is cached across parent re-renders that produce a fresh account ref with content-equal parsed info', () => {
+        const bytes = zeroBytes(82);
+        const buildAccount = (): Account =>
+            makeAccount({
+                owner: TOKEN_PROGRAM_ID,
+                parsed: {
+                    parsed: {
+                        info: { decimals: 6, freezeAuthority: null, isInitialized: true, mintAuthority: null, supply: '1000000' },
+                        type: 'mint',
+                    },
+                    program: 'spl-token',
+                } as Account['data']['parsed'],
+                rawData: bytes,
+            });
+
+        const { result, rerender } = renderHook(({ account }: { account: Account }) => useAccountRegions(account, bytes), {
+            initialProps: { account: buildAccount() },
+        });
+
+        const first = result.current;
+        rerender({ account: buildAccount() }); // fresh ref, identical content
+        const second = result.current;
+
+        expect(first).not.toBeNull();
+        expect(second).toBe(first);
+    });
+
+    it('memo rebuilds when parsed info content changes (different supply)', () => {
+        const bytes = zeroBytes(82);
+        const buildAccount = (supply: string): Account =>
+            makeAccount({
+                owner: TOKEN_PROGRAM_ID,
+                parsed: {
+                    parsed: {
+                        info: { decimals: 6, freezeAuthority: null, isInitialized: true, mintAuthority: null, supply },
+                        type: 'mint',
+                    },
+                    program: 'spl-token',
+                } as Account['data']['parsed'],
+                rawData: bytes,
+            });
+
+        const { result, rerender } = renderHook(({ account }: { account: Account }) => useAccountRegions(account, bytes), {
+            initialProps: { account: buildAccount('1000000') },
+        });
+        const first = result.current;
+        rerender({ account: buildAccount('2000000') });
+        const second = result.current;
+
+        expect(first).not.toBeNull();
+        expect(second).not.toBe(first);
+    });
+
 });

@@ -27,13 +27,16 @@ export function useAccountRegions(
 ): RegionsState {
     const ownerBase58 = account?.owner.toBase58() ?? null;
     const parsedData = account?.data.parsed;
-    // Narrow the memo dep footprint: only the two fields the body reads. Depending on
-    // `parsedData` as a whole object invalidates whenever the parent re-creates `account`,
-    // even for content-equal data. `parsedType` is a primitive; `parsedInfo` is still an
-    // object reference (relying on callers to pass stable `account` for true stability).
+    // Narrow the memo dep footprint: only the fields the body reads. Depending on
+    // `parsedData` as a whole object invalidates the memo whenever the parent re-creates
+    // `account`, even for content-equal data. `parsedType` is a primitive. `parsedInfo`
+    // is an object reference, so we derive a content-based key via JSON.stringify — the
+    // jsonParsed mint/token shapes are small (<1 KB) and parents in this codebase do
+    // re-create `account` across renders without always preserving reference identity.
     const tokenParsed = parsedData && isTokenProgramData(parsedData) ? parsedData.parsed : undefined;
     const parsedType = tokenParsed?.type;
     const parsedInfo: unknown = tokenParsed?.info;
+    const parsedInfoKey = parsedInfo === undefined ? undefined : JSON.stringify(parsedInfo);
 
     return useMemo<RegionsState>(() => {
         if (!rawData) return null;
@@ -76,7 +79,10 @@ export function useAccountRegions(
             return buildSplMintRegions(rawData, undefined);
         }
         return null;
-    }, [rawData, ownerBase58, parsedType, parsedInfo]);
+        // parsedInfoKey is the stable content hash for parsedInfo; depending on
+        // parsedInfo directly would invalidate on every render with a fresh object ref.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [rawData, ownerBase58, parsedType, parsedInfoKey]);
 }
 
 /**
