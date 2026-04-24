@@ -1,6 +1,7 @@
 'use client';
 
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@components/shared/ui/tooltip';
+import { TooltipProvider } from '@components/shared/ui/tooltip';
+import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { cn } from '@shared/utils';
 import { useMemo } from 'react';
 
@@ -160,8 +161,8 @@ function RegionSegment({
 }) {
     const isRegionStart = startOffset === region.start;
     return (
-        <Tooltip>
-            <TooltipTrigger asChild>
+        <TooltipPrimitive.Root>
+            <TooltipPrimitive.Trigger asChild>
                 <span
                     data-testid={`annotated-segment-${startOffset}`}
                     data-region-id={region.id}
@@ -182,11 +183,21 @@ function RegionSegment({
                         />
                     ))}
                 </span>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="e-max-w-sm e-break-words">
-                <TooltipBody region={region} />
-            </TooltipContent>
-        </Tooltip>
+            </TooltipPrimitive.Trigger>
+            <TooltipPrimitive.Portal>
+                <TooltipPrimitive.Content
+                    side="top"
+                    sideOffset={0}
+                    className={cn(
+                        'e-animate-in e-fade-in-0 e-zoom-in-95 data-[state=closed]:e-animate-out data-[state=closed]:e-fade-out-0 data-[state=closed]:e-zoom-out-95 data-[side=bottom]:e-slide-in-from-top-2 data-[side=left]:e-slide-in-from-right-2 data-[side=right]:e-slide-in-from-left-2 data-[side=top]:e-slide-in-from-bottom-2 e-origin-(--radix-tooltip-content-transform-origin) e-z-50 e-w-fit e-text-balance e-rounded-md e-bg-neutral-900 e-px-3 e-py-1.5 e-text-xs e-text-neutral-50 dark:e-bg-neutral-50 dark:e-text-neutral-900',
+                        'e-max-w-sm e-break-words',
+                    )}
+                >
+                    <TooltipBody region={region} />
+                    <TooltipPrimitive.Arrow className="e-fill-primary e-z-50 e-size-2.5 e-translate-y-[calc(-50%_-_2px)] e-rotate-0 e-rounded-[2px] e-fill-transparent dark:e-fill-neutral-50" />
+                </TooltipPrimitive.Content>
+            </TooltipPrimitive.Portal>
+        </TooltipPrimitive.Root>
     );
 }
 

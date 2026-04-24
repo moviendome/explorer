@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { buildSplMintRegions, SPL_MINT_SIZE } from '../../model/spl-token';
+import { Region } from '../../model/types';
 import { AnnotatedHexData, TooltipBody } from '../AnnotatedHexData';
 
 // Radix Tooltip pulls in ResizeObserver + DOMRect via @radix-ui/react-use-size; jsdom lacks both.
@@ -150,5 +151,119 @@ describe('AnnotatedHexData', () => {
         expect(screen.getByTestId('annotated-hex-legend-mint.mintAuthority')).toBeInTheDocument();
         expect(screen.getByTestId('annotated-hex-legend-mint.supply')).toBeInTheDocument();
         expect(screen.getByTestId('annotated-hex-legend-mint.freezeAuthority')).toBeInTheDocument();
+    });
+
+    it('TooltipBody renders scalar DecodedValue with value and label', () => {
+        const region: Region = {
+            decodedValue: { kind: 'scalar', label: 'Initialized', value: 'Yes' },
+            id: 'test.scalar',
+            kind: 'scalar',
+            length: 1,
+            name: 'Test Scalar',
+            start: 0,
+        };
+        render(<TooltipBody region={region} />);
+
+        const tooltip = screen.getByTestId('annotated-tooltip-test.scalar');
+        expect(tooltip).toHaveTextContent('Test Scalar');
+        expect(tooltip).toHaveTextContent('Yes');
+        expect(tooltip).toHaveTextContent('(Initialized)');
+    });
+
+    it('TooltipBody renders option DecodedValue as "Some" or "None"', () => {
+        const someRegion: Region = {
+            decodedValue: { kind: 'option', present: true },
+            id: 'test.optionSome',
+            kind: 'option',
+            length: 4,
+            name: 'Option Some',
+            start: 0,
+        };
+        const { rerender } = render(<TooltipBody region={someRegion} />);
+        expect(screen.getByTestId('annotated-tooltip-test.optionSome')).toHaveTextContent('Some');
+
+        const noneRegion: Region = {
+            decodedValue: { kind: 'option', present: false },
+            id: 'test.optionNone',
+            kind: 'option',
+            length: 4,
+            name: 'Option None',
+            start: 0,
+        };
+        rerender(<TooltipBody region={noneRegion} />);
+        expect(screen.getByTestId('annotated-tooltip-test.optionNone')).toHaveTextContent('None');
+    });
+
+    it('TooltipBody renders text DecodedValue as plain text', () => {
+        const region: Region = {
+            decodedValue: { kind: 'text', value: 'hello world' },
+            id: 'test.text',
+            kind: 'neutral',
+            length: 11,
+            name: 'Test Text',
+            start: 0,
+        };
+        render(<TooltipBody region={region} />);
+
+        const tooltip = screen.getByTestId('annotated-tooltip-test.text');
+        expect(tooltip).toHaveTextContent('Test Text');
+        expect(tooltip).toHaveTextContent('hello world');
+    });
+
+    it('TooltipBody renders unparsed DecodedValue with reason', () => {
+        const region: Region = {
+            decodedValue: { kind: 'unparsed', reason: 'no-jsonparsed' },
+            id: 'test.unparsed',
+            kind: 'neutral',
+            length: 4,
+            name: 'Test Unparsed',
+            start: 0,
+        };
+        render(<TooltipBody region={region} />);
+
+        const tooltip = screen.getByTestId('annotated-tooltip-test.unparsed');
+        expect(tooltip).toHaveTextContent('Test Unparsed');
+        expect(tooltip).toHaveTextContent('(unparsed: no-jsonparsed)');
+    });
+
+    it('TooltipBody renders amount DecodedValue without decimals as raw only (no ui-scaled)', () => {
+        const region: Region = {
+            decodedValue: { kind: 'amount', raw: 1234567890n },
+            id: 'test.amountNoDecimals',
+            kind: 'amount',
+            length: 8,
+            name: 'Amount No Decimals',
+            start: 0,
+        };
+        render(<TooltipBody region={region} />);
+
+        const tooltip = screen.getByTestId('annotated-tooltip-test.amountNoDecimals');
+        expect(tooltip).toHaveTextContent('Amount No Decimals');
+        expect(tooltip).toHaveTextContent('1234567890');
+        expect(tooltip).not.toHaveTextContent('with');
+        expect(tooltip).not.toHaveTextContent('decimals');
+    });
+
+    it('renders uncovered bytes via UnannotatedSegment when regions do not span the full buffer', () => {
+        // Build a 20-byte buffer but only cover bytes [0..8] with a single region.
+        // Bytes 8..20 should render as UnannotatedSegment cells (no data-region-id).
+        const bytes = new Uint8Array(20);
+        const regions: Region[] = [
+            {
+                decodedValue: { kind: 'amount', raw: 0n },
+                id: 'partial.region',
+                kind: 'amount',
+                length: 8,
+                name: 'Partial Region',
+                start: 0,
+            },
+        ];
+        render(<AnnotatedHexData raw={bytes} regions={regions} />);
+
+        // Covered cells have data-region-id set.
+        expect(screen.getByTestId('annotated-cell-0')).toHaveAttribute('data-region-id', 'partial.region');
+        // Uncovered cells render without a region id (UnannotatedSegment).
+        const uncoveredCell = screen.getByTestId('annotated-cell-10');
+        expect(uncoveredCell).not.toHaveAttribute('data-region-id');
     });
 });

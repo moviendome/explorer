@@ -33,7 +33,7 @@ export function useAccountRegions(
     // object reference (relying on callers to pass stable `account` for true stability).
     const tokenParsed = parsedData && isTokenProgramData(parsedData) ? parsedData.parsed : undefined;
     const parsedType = tokenParsed?.type;
-    const parsedInfo = tokenParsed?.info;
+    const parsedInfo: unknown = tokenParsed?.info;
 
     return useMemo<RegionsState>(() => {
         if (!rawData) return null;
@@ -66,7 +66,7 @@ export function useAccountRegions(
         }
         // No parsed.type. For Token-2022 with length >= 165, the accountType byte at
         // offset 165 disambiguates: 1 = Mint, 2 = Account. Below 165 must be a plain mint.
-        if (rawData.length >= SPL_TOKEN_ACCOUNT_SIZE) {
+        if (rawData.length > SPL_TOKEN_ACCOUNT_SIZE) {
             const accountTypeByte = rawData[SPL_TOKEN_ACCOUNT_SIZE];
             return accountTypeByte === 1
                 ? buildSplMintRegions(rawData, undefined)

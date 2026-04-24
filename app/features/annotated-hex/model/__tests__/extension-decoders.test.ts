@@ -68,6 +68,15 @@ describe('MintCloseAuthority decoder (type 3)', () => {
         if (regions[2].decodedValue.kind !== 'pubkey') throw new Error('unreachable');
         expect(regions[2].decodedValue.isNone).toBe(true);
     });
+
+    it('emits no sub-regions when length < 32 (undersized)', () => {
+        // 31 bytes < required 32 — decoder returns []; header region still emitted.
+        const bytes = appendTlvTail(baseMint(), 1, [{ data: new Uint8Array(31), type: 3 }]);
+        const regions = walkTokenExtensions(bytes, SPL_MINT_SIZE);
+        // accountType + header only
+        expect(regions).toHaveLength(2);
+        expect(regions.find(r => r.name === 'MintCloseAuthority — Close Authority')).toBeUndefined();
+    });
 });
 
 describe('PermanentDelegate decoder (type 12)', () => {
@@ -79,6 +88,13 @@ describe('PermanentDelegate decoder (type 12)', () => {
         expect(regions[2].name).toBe('PermanentDelegate — Delegate');
         if (regions[2].decodedValue.kind !== 'pubkey') throw new Error('unreachable');
         expect(regions[2].decodedValue.base58).toBe(bs58.encode(delegate));
+    });
+
+    it('emits no sub-regions when length < 32 (undersized)', () => {
+        const bytes = appendTlvTail(baseMint(), 1, [{ data: new Uint8Array(31), type: 12 }]);
+        const regions = walkTokenExtensions(bytes, SPL_MINT_SIZE);
+        expect(regions).toHaveLength(2);
+        expect(regions.find(r => r.name === 'PermanentDelegate — Delegate')).toBeUndefined();
     });
 });
 
@@ -106,6 +122,15 @@ describe('MetadataPointer decoder (type 18)', () => {
         const addr = regions[3];
         expect(auth.start).toBe(header.start + header.length);
         expect(addr.start).toBe(auth.start + auth.length);
+    });
+
+    it('emits no sub-regions when length < 64 (undersized)', () => {
+        const bytes = appendTlvTail(baseMint(), 1, [{ data: new Uint8Array(63), type: 18 }]);
+        const regions = walkTokenExtensions(bytes, SPL_MINT_SIZE);
+        // accountType + header only
+        expect(regions).toHaveLength(2);
+        expect(regions.find(r => r.name === 'MetadataPointer — Authority')).toBeUndefined();
+        expect(regions.find(r => r.name === 'MetadataPointer — Metadata Address')).toBeUndefined();
     });
 });
 
@@ -141,6 +166,14 @@ describe('InterestBearingConfig decoder (type 10)', () => {
         if (regions[3].decodedValue.kind !== 'text') throw new Error('unreachable');
         expect(regions[3].decodedValue.value).toBe('1700000000');
     });
+
+    it('emits no sub-regions when length < 52 (undersized)', () => {
+        const bytes = appendTlvTail(baseMint(), 1, [{ data: new Uint8Array(51), type: 10 }]);
+        const regions = walkTokenExtensions(bytes, SPL_MINT_SIZE);
+        // accountType + header only (header is "InterestBearingConfig — Header"; decoder contributed nothing)
+        expect(regions).toHaveLength(2);
+        expect(regions.find(r => r.name === 'InterestBearing — Rate Authority')).toBeUndefined();
+    });
 });
 
 describe('TokenMetadata decoder (type 19)', () => {
@@ -150,6 +183,7 @@ describe('TokenMetadata decoder (type 19)', () => {
         name?: string;
         symbol?: string;
         uri?: string;
+        trailingBytes?: Uint8Array;
     }): Uint8Array {
         return concat(
             opts.updateAuthority ?? new Uint8Array(32),
@@ -157,6 +191,7 @@ describe('TokenMetadata decoder (type 19)', () => {
             borshString(opts.name ?? ''),
             borshString(opts.symbol ?? ''),
             borshString(opts.uri ?? ''),
+            opts.trailingBytes ?? new Uint8Array(0),
         );
     }
 
@@ -226,6 +261,30 @@ describe('TokenMetadata decoder (type 19)', () => {
         if (uriRegion.decodedValue.kind !== 'text') throw new Error('unreachable');
         expect(uriRegion.decodedValue.value.length).toBeLessThanOrEqual(257); // 256 + ellipsis
         expect(uriRegion.decodedValue.value.endsWith('…')).toBe(true);
+    });
+
+    it('emits a trailing "Additional Metadata" region for bytes past the URI', () => {
+        const trailing = new Uint8Array([0x01, 0x02, 0x03, 0x04, 0x05]);
+        const data = buildTokenMetadataData({
+            name: 'N',
+            symbol: 'S',
+            trailingBytes: trailing,
+            uri: 'u',
+        });
+        const bytes = appendTlvTail(baseMint(), 1, [{ data, type: 19 }]);
+        const regions = walkTokenExtensions(bytes, SPL_MINT_SIZE);
+        const additional = regions.find(r => r.name === 'TokenMetadata — Additional Metadata');
+        expect(additional).toBeDefined();
+        expect(additional!.length).toBe(trailing.length);
+    });
+
+    it('emits no sub-regions when length < 68 (undersized)', () => {
+        const bytes = appendTlvTail(baseMint(), 1, [{ data: new Uint8Array(67), type: 19 }]);
+        const regions = walkTokenExtensions(bytes, SPL_MINT_SIZE);
+        // accountType + header only (header is "TokenMetadata — Header"; decoder contributed nothing)
+        expect(regions).toHaveLength(2);
+        expect(regions.find(r => r.name === 'TokenMetadata — Update Authority')).toBeUndefined();
+        expect(regions.find(r => r.name === 'TokenMetadata — Mint')).toBeUndefined();
     });
 
     it('graceful truncation: TLV declares a long string with no remaining bytes', () => {

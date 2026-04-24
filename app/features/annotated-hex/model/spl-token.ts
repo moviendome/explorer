@@ -335,7 +335,7 @@ export function walkTokenExtensions(raw: Uint8Array, baseSize: number): Region[]
 
         const decoder = EXTENSION_DECODERS[extType];
         if (decoder) {
-            regions.push(...decoder(raw, pos, extLen, extIndex, extName));
+            regions.push(...decoder(raw, pos, extLen, extIndex));
         } else {
             const isKnown = extType in EXTENSION_NAMES;
             regions.push({
@@ -362,7 +362,6 @@ type ExtensionDecoder = (
     start: number,
     length: number,
     extIndex: number,
-    extName: string,
 ) => Region[];
 
 function decodeOptionalNonZeroPubkey(raw: Uint8Array, start: number): DecodedValue {

@@ -118,4 +118,27 @@ describe('useAccountRegions', () => {
         expect(result.current![0].id).toBe('token.mint');
     });
 
+    it('Token-2022 (no parsed.type): dispatches to TokenAccount layout when bytes[165] = 2', () => {
+        // Token-2022 account with length > 165 and no parsed.type — the accountType
+        // byte at offset 165 disambiguates. 2 = Account.
+        const bytes = zeroBytes(200);
+        bytes[165] = 2;
+        const account = makeAccount({ owner: TOKEN_2022_PROGRAM_ID, rawData: bytes });
+        const { result } = renderHook(() => useAccountRegions(account, bytes));
+        expect(result.current).not.toBeNull();
+        // First region should be token.mint — confirming the TokenAccount layout is used.
+        expect(result.current![0].id).toBe('token.mint');
+    });
+
+    it('Token-2022 (no parsed.type): dispatches to Mint layout when bytes[165] = 0 (current behavior: non-1 → TokenAccount)', () => {
+        // Documents current behavior: the accountType byte is compared strictly to 1 — anything
+        // else (0, 2, 42, …) falls through to buildSplTokenAccountRegions.
+        const bytes = zeroBytes(200);
+        bytes[165] = 42;
+        const account = makeAccount({ owner: TOKEN_2022_PROGRAM_ID, rawData: bytes });
+        const { result } = renderHook(() => useAccountRegions(account, bytes));
+        expect(result.current).not.toBeNull();
+        expect(result.current![0].id).toBe('token.mint');
+    });
+
 });
