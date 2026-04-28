@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { buildSplMintRegions, SPL_MINT_SIZE } from '../../model/spl-token';
-import { Region } from '../../model/types';
+import { Region, UnparsedReason } from '../../model/types';
 import { __test_exports__, AnnotatedHexData } from '../AnnotatedHexData';
 
 const { TooltipBody } = __test_exports__;
@@ -212,10 +212,17 @@ describe('AnnotatedHexData', () => {
         expect(tooltip).toHaveTextContent('hello world');
     });
 
-    it('TooltipBody renders unparsed DecodedValue with reason', () => {
+    it.each<[UnparsedReason, string]>([
+        ['no-jsonparsed', 'no parsed data'],
+        ['not-applicable', 'not applicable'],
+        ['padding', 'padding'],
+        ['truncated', 'truncated'],
+        ['unknown-ext', 'unknown extension'],
+        ['malformed', 'malformed'],
+    ])('TooltipBody renders unparsed DecodedValue with reason=%s as label "%s"', (reason, label) => {
         const region: Region = {
-            decodedValue: { kind: 'unparsed', reason: 'no-jsonparsed' },
-            id: 'test.unparsed',
+            decodedValue: { kind: 'unparsed', reason },
+            id: `test.unparsed.${reason}`,
             kind: 'neutral',
             length: 4,
             name: 'Test Unparsed',
@@ -223,9 +230,9 @@ describe('AnnotatedHexData', () => {
         };
         render(<TooltipBody region={region} />);
 
-        const tooltip = screen.getByTestId('annotated-tooltip-test.unparsed');
+        const tooltip = screen.getByTestId(`annotated-tooltip-test.unparsed.${reason}`);
         expect(tooltip).toHaveTextContent('Test Unparsed');
-        expect(tooltip).toHaveTextContent('(no parsed data)');
+        expect(tooltip).toHaveTextContent(`(${label})`);
     });
 
     it('TooltipBody renders amount DecodedValue without decimals as raw only (no ui-scaled)', () => {

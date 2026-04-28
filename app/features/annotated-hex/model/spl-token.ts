@@ -90,7 +90,7 @@ export function buildSplMintRegions(raw: Uint8Array, parsed: MintAccountInfo | u
 function decodeMintField(fieldId: string, raw: Uint8Array, parsed: MintAccountInfo | undefined): DecodedValue {
     switch (fieldId) {
         case 'mint.mintAuthorityOption':
-            return { kind: 'option', present: readUint32LE(raw, 0) === 1 };
+            return decodeCOptionTag(raw, 0);
         case 'mint.mintAuthority':
             return decodeCOptionPubkey(raw, 0, 4, parsed?.mintAuthority);
         case 'mint.supply': {
@@ -104,7 +104,7 @@ function decodeMintField(fieldId: string, raw: Uint8Array, parsed: MintAccountIn
             return { kind: 'scalar', label: initialized ? 'Initialized' : 'Uninitialized', value: initialized ? 'Yes' : 'No' };
         }
         case 'mint.freezeAuthorityOption':
-            return { kind: 'option', present: readUint32LE(raw, 46) === 1 };
+            return decodeCOptionTag(raw, 46);
         case 'mint.freezeAuthority':
             return decodeCOptionPubkey(raw, 46, 50, parsed?.freezeAuthority);
         default:
@@ -118,10 +118,23 @@ function decodeCOptionPubkey(
     pubkeyOffset: number,
     parsedPubkey: { toBase58(): string } | null | undefined,
 ): DecodedValue {
-    const present = readUint32LE(raw, tagOffset) === 1;
-    if (!present) return { base58: '', isNone: true, kind: 'pubkey' };
-    if (parsedPubkey) return { base58: parsedPubkey.toBase58(), kind: 'pubkey' };
-    return { base58: bs58.encode(raw.slice(pubkeyOffset, pubkeyOffset + 32)), kind: 'pubkey' };
+    const tag = readUint32LE(raw, tagOffset);
+    if (tag === 0) return { base58: '', isNone: true, kind: 'pubkey' };
+    if (tag === 1) {
+        if (parsedPubkey) return { base58: parsedPubkey.toBase58(), kind: 'pubkey' };
+        return { base58: bs58.encode(raw.slice(pubkeyOffset, pubkeyOffset + 32)), kind: 'pubkey' };
+    }
+    // COption tag must be 0 (None) or 1 (Some). Any other value is malformed —
+    // do not interpret the trailing 32 bytes as a pubkey.
+    return { kind: 'unparsed', reason: 'malformed' };
+}
+
+// COption tag is a 4-byte LE uint constrained to {0, 1}. Anything else is malformed.
+function decodeCOptionTag(raw: Uint8Array, tagOffset: number): DecodedValue {
+    const tag = readUint32LE(raw, tagOffset);
+    if (tag === 0) return { kind: 'option', present: false };
+    if (tag === 1) return { kind: 'option', present: true };
+    return { kind: 'scalar', label: `malformed (tag=${tag})`, value: tag };
 }
 
 export const SPL_TOKEN_ACCOUNT_SIZE = 165;
@@ -184,16 +197,16 @@ function decodeTokenAccountField(
             return { decimals: parsed?.tokenAmount?.decimals, kind: 'amount', raw: rawAmount };
         }
         case 'token.delegateOption':
-            return { kind: 'option', present: readUint32LE(raw, 72) === 1 };
+            return decodeCOptionTag(raw, 72);
         case 'token.delegate':
             return decodeCOptionPubkey(raw, 72, 76, parsed?.delegate);
         case 'token.state': {
             const stateByte = raw[108];
-            const label = parsed?.state ?? STATE_LABELS[stateByte] ?? 'uninitialized';
+            const label = parsed?.state ?? STATE_LABELS[stateByte] ?? 'unknown';
             return { kind: 'scalar', label, value: stateByte };
         }
         case 'token.isNativeOption':
-            return { kind: 'option', present: readUint32LE(raw, 109) === 1 };
+            return decodeCOptionTag(raw, 109);
         case 'token.nativeAmount': {
             const isNative = readUint32LE(raw, 109) === 1;
             if (!isNative) {
@@ -207,7 +220,7 @@ function decodeTokenAccountField(
             return { decimals: parsed?.delegatedAmount?.decimals, kind: 'amount', raw: rawAmount };
         }
         case 'token.closeAuthorityOption':
-            return { kind: 'option', present: readUint32LE(raw, 129) === 1 };
+            return decodeCOptionTag(raw, 129);
         case 'token.closeAuthority':
             return decodeCOptionPubkey(raw, 129, 133, parsed?.closeAuthority);
         default:

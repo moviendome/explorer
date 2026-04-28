@@ -11,6 +11,7 @@ import { cellClasses, chipClasses } from './palette';
 const ROW_SIZE = 16;
 
 const UNPARSED_REASON_LABEL: Record<UnparsedReason, string> = {
+    malformed: 'malformed',
     'no-jsonparsed': 'no parsed data',
     'not-applicable': 'not applicable',
     padding: 'padding',
@@ -35,7 +36,7 @@ export function AnnotatedHexData({ raw, regions }: Props) {
             }
         });
         return { offsetMap: offsets, regionIndexById: indexById };
-    }, [raw.length, regions]);
+    }, [regions]);
 
     const rows = useMemo(() => {
         const result: { offset: number; bytes: Uint8Array }[] = [];
@@ -182,7 +183,7 @@ function RegionSegment({
                         cellClasses(region.kind === 'neutral', rotationIndex),
                     )}
                 >
-                    {Array.from(bytes).map((byte, i) => (
+                    {Array.from(bytes, (byte, i) => (
                         <Cell
                             key={startOffset + i}
                             offset={startOffset + i}
@@ -212,7 +213,7 @@ function RegionSegment({
 function UnannotatedSegment({ startOffset, bytes }: { startOffset: number; bytes: Uint8Array }) {
     return (
         <span className="e-inline-flex e-gap-px e-text-neutral-500">
-            {Array.from(bytes).map((byte, i) => (
+            {Array.from(bytes, (byte, i) => (
                 <Cell key={startOffset + i} offset={startOffset + i} byte={byte} />
             ))}
         </span>
@@ -264,15 +265,34 @@ function RenderDecodedValue({ value }: { value: DecodedValue }) {
             );
         case 'amount': {
             const raw = value.raw.toString();
-            if (value.decimals != null) {
-                const div = 10n ** BigInt(value.decimals);
-                const whole = value.raw / div;
-                const frac = (value.raw % div).toString().padStart(value.decimals, '0');
+            // Cap at 19: u64-fractional precision. Anything larger comes from RPC
+            // drift (decimals on-chain is u8, but the validator schema does not
+            // bound it) and would compute 10n**N + padStart(N) on every hover —
+            // pathological values like 255 produce multi-kilobyte tooltip strings.
+            const DECIMALS_DISPLAY_MAX = 19;
+            const decimals = value.decimals;
+            if (decimals != null && decimals >= 0 && decimals <= DECIMALS_DISPLAY_MAX) {
+                const div = 10n ** BigInt(decimals);
+                const negative = value.raw < 0n;
+                const abs = negative ? -value.raw : value.raw;
+                const whole = abs / div;
+                const frac = (abs % div).toString().padStart(decimals, '0');
+                const sign = negative ? '-' : '';
                 return (
                     <span>
                         <code className="e-font-mono">{raw}</code>{' '}
                         <span className="e-text-neutral-400">
-                            ({whole.toString()}.{frac} with {value.decimals} decimals)
+                            ({sign}{whole.toString()}.{frac} with {value.decimals} decimals)
+                        </span>
+                    </span>
+                );
+            }
+            if (value.decimals != null) {
+                return (
+                    <span>
+                        <code className="e-font-mono">{raw}</code>{' '}
+                        <span className="e-text-neutral-400">
+                            (decimals={value.decimals} out of displayable range)
                         </span>
                     </span>
                 );

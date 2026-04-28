@@ -130,6 +130,73 @@ describe('useAccountRegions', () => {
         expect(result.current![0].id).toBe('token.mint');
     });
 
+    it('Token-2022 (no parsed.type, length === 82 SPL_MINT_SIZE): returns mint regions', () => {
+        const bytes = zeroBytes(82);
+        const account = makeAccount({ owner: TOKEN_2022_PROGRAM_ID, rawData: bytes });
+        const { result } = renderHook(() => useAccountRegions(account, bytes));
+        expect(result.current).not.toBeNull();
+        expect(result.current!.map(r => r.id)).toContain('mint.mintAuthority');
+    });
+
+    it('Token-2022 (no parsed.type, length 100 between mint and token-account): returns mint regions', () => {
+        const bytes = zeroBytes(100);
+        const account = makeAccount({ owner: TOKEN_2022_PROGRAM_ID, rawData: bytes });
+        const { result } = renderHook(() => useAccountRegions(account, bytes));
+        expect(result.current).not.toBeNull();
+        expect(result.current!.map(r => r.id)).toContain('mint.mintAuthority');
+    });
+
+    it('Token-2022 (no parsed.type, length 50 < SPL_MINT_SIZE): returns null', () => {
+        const bytes = zeroBytes(50);
+        const account = makeAccount({ owner: TOKEN_2022_PROGRAM_ID, rawData: bytes });
+        const { result } = renderHook(() => useAccountRegions(account, bytes));
+        expect(result.current).toBeNull();
+    });
+
+    it('Token-2022 (no parsed.type, length === 165 SPL_TOKEN_ACCOUNT_SIZE): returns null because Mint vs Account is ambiguous', () => {
+        // At length === 165, both layouts fit (a base mint padded to token-account size,
+        // or a Token-2022 token account with no TLV extensions). The discriminator byte
+        // at offset 165 only exists for length > 165, so we cannot tell — prefer null.
+        const bytes = zeroBytes(165);
+        const account = makeAccount({ owner: TOKEN_2022_PROGRAM_ID, rawData: bytes });
+        const { result } = renderHook(() => useAccountRegions(account, bytes));
+        expect(result.current).toBeNull();
+    });
+
+    it('Token-2022 + parsedType=mint + zeroBytes(50) (under SPL_MINT_SIZE): returns null', () => {
+        const bytes = zeroBytes(50);
+        const account = makeAccount({
+            owner: TOKEN_2022_PROGRAM_ID,
+            parsed: {
+                parsed: {
+                    info: {},
+                    type: 'mint',
+                },
+                program: 'spl-token-2022',
+            } as Account['data']['parsed'],
+            rawData: bytes,
+        });
+        const { result } = renderHook(() => useAccountRegions(account, bytes));
+        expect(result.current).toBeNull();
+    });
+
+    it('Token-2022 + parsedType=account + zeroBytes(100) (under SPL_TOKEN_ACCOUNT_SIZE): returns null', () => {
+        const bytes = zeroBytes(100);
+        const account = makeAccount({
+            owner: TOKEN_2022_PROGRAM_ID,
+            parsed: {
+                parsed: {
+                    info: {},
+                    type: 'account',
+                },
+                program: 'spl-token-2022',
+            } as Account['data']['parsed'],
+            rawData: bytes,
+        });
+        const { result } = renderHook(() => useAccountRegions(account, bytes));
+        expect(result.current).toBeNull();
+    });
+
     it.each([
         ['unassigned discriminator byte 0', 0],
         ['unknown discriminator byte 42', 42],

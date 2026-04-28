@@ -16,7 +16,8 @@ export type UnparsedReason =
     | 'unknown-ext' // Token-2022 TLV extension type this code doesn't decode yet.
     | 'truncated' // TLV header or body extends past the buffer.
     | 'padding' // Spec-defined zero-fill or layout gap carrying no field value.
-    | 'not-applicable'; // Field slot reserved but semantically disabled (e.g. nativeAmount when !isNative).
+    | 'not-applicable' // Field slot reserved but semantically disabled (e.g. nativeAmount when !isNative).
+    | 'malformed'; // Encoded value violates the spec (e.g. COption tag outside {0, 1}).
 
 export interface LayoutField {
     id: string;

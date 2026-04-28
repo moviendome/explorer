@@ -1,28 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildSplMintRegions, SPL_MINT_SIZE, SPL_TOKEN_ACCOUNT_SIZE, walkTokenExtensions } from '../spl-token';
-
-type TlvEntry = { type: number; data: Uint8Array };
-
-function appendTlvTail(base: Uint8Array, accountType: number, entries: TlvEntry[]): Uint8Array {
-    const tailLen = 1 + entries.reduce((sum, e) => sum + 4 + e.data.length, 0);
-    const out = new Uint8Array(base.length + tailLen);
-    out.set(base, 0);
-    out[base.length] = accountType;
-    const view = new DataView(out.buffer);
-    let pos = base.length + 1;
-    for (const entry of entries) {
-        view.setUint16(pos, entry.type, true);
-        view.setUint16(pos + 2, entry.data.length, true);
-        out.set(entry.data, pos + 4);
-        pos += 4 + entry.data.length;
-    }
-    return out;
-}
-
-function baseMint(): Uint8Array {
-    return new Uint8Array(SPL_MINT_SIZE);
-}
+import { appendTlvTail, baseMint } from './tlv-test-helpers';
 
 describe('walkTokenExtensions', () => {
     it('emits no regions when no tail exists', () => {
@@ -73,6 +52,12 @@ describe('walkTokenExtensions', () => {
             expect(r.start).toBe(expectedStart);
             return r.start + r.length;
         }, SPL_MINT_SIZE);
+
+        // Known-but-undecoded data regions render as a 'text' DecodedValue with byte count.
+        if (regions[2].decodedValue.kind !== 'text') throw new Error('unreachable');
+        expect(regions[2].decodedValue.value).toBe('8 byte(s)');
+        if (regions[4].decodedValue.kind !== 'text') throw new Error('unreachable');
+        expect(regions[4].decodedValue.value).toBe('1 byte(s)');
     });
 
     it('unknown extension type does not abort the loop; subsequent known extension still emits', () => {

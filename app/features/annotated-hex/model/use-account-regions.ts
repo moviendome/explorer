@@ -16,7 +16,7 @@ import { Region } from './types';
 
 export const MAX_ANNOTATABLE_SIZE = 4096;
 
-export type RegionsState = Region[] | null;
+type RegionsState = Region[] | null;
 
 const TOKEN_PROGRAM_ID_BASE58 = TOKEN_PROGRAM_ID.toBase58();
 const TOKEN_2022_PROGRAM_ID_BASE58 = TOKEN_2022_PROGRAM_ID.toBase58();
@@ -78,7 +78,13 @@ export function useAccountRegions(
             if (accountTypeByte === 2) return buildSplTokenAccountRegions(rawData, undefined);
             return null;
         }
-        if (rawData.length >= SPL_MINT_SIZE) {
+        // At rawData.length === SPL_TOKEN_ACCOUNT_SIZE (165) bytes, Mint vs Account
+        // is ambiguous without parsedType — both layouts are 165 bytes (a base mint
+        // padded to token-account size, or a Token-2022 token account with no TLV
+        // extensions). The discriminator byte at offset 165 only exists when length
+        // exceeds 165, so for length === 165 we cannot tell. Prefer no annotation
+        // over guessing Mint — same rule as the unknown accountType byte case.
+        if (rawData.length >= SPL_MINT_SIZE && rawData.length < SPL_TOKEN_ACCOUNT_SIZE) {
             return buildSplMintRegions(rawData, undefined);
         }
         return null;

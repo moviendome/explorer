@@ -204,4 +204,17 @@ describe('buildSplTokenAccountRegions', () => {
         expect(() => buildSplTokenAccountRegions(new Uint8Array(100), undefined)).toThrow(/≥ 165 bytes/);
     });
 
+    it('closeAuthority COption: tag=1 → option present, pubkey decoded from raw bytes', () => {
+        const closeAuthority = fakePubkey(0xcc);
+        const bytes = buildSplTokenAccountBytes({ closeAuthority });
+        const regions = buildSplTokenAccountRegions(bytes, undefined);
+        const tag = regions.find(r => r.id === 'token.closeAuthorityOption')!;
+        const close = regions.find(r => r.id === 'token.closeAuthority')!;
+        if (tag.decodedValue.kind !== 'option') throw new Error('unreachable');
+        expect(tag.decodedValue.present).toBe(true);
+        if (close.decodedValue.kind !== 'pubkey') throw new Error('unreachable');
+        expect(close.decodedValue.isNone).toBeFalsy();
+        expect(close.decodedValue.base58).toBe(bs58.encode(closeAuthority));
+    });
+
 });
